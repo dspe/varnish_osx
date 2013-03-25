@@ -1,0 +1,101 @@
+#!/bin/bash
+#
+# name: Varnish Cache Service for OSX
+# description: Varnish Reverse Cache for Web Sites
+# Script via Philippe Vincent-Royol @ 25/03/13
+
+#Edit here to the name fo your .vcl FILE
+SITEID=ez5
+CONFIG="/opt/local/etc/varnish.conf" # not used
+
+RETVAL=0
+
+OPTIONS="-f /usr/local/etc/varnish/$SITEID.vcl \
+-a 127.0.0.1:8080 \
+-s file,/tmp,500M \
+-P /var/run/varnishd.pid \
+-t 120 \
+-i $SITEID "
+
+
+function echo_success () { echo -n " [ OK ] " ; }
+function echo_failure () { echo -n " [FAILED] " ; }
+function echo_warning () { echo -n " [WARNING] " ; }
+function killproc() {
+PID=`pidof -s -x -o $$ -o $PPID -o %PPID $1`
+[ $PID ] && kill $PID ; }
+
+
+getpid() {
+	pid=`ps -ef | grep 'varnishd ' | grep -v grep |head -n 1 | awk '{print $2}'`
+}
+
+start() {
+	echo -n $"Starting Varnish Cache Daemon: "
+		getpid
+		if [ -z "$pid" ]; then
+			# in case of unclean shutdown
+			nohup /usr/bin/su root -c "/usr/local/sbin/varnishd $OPTIONS"
+				RETVAL=$?
+				fi
+				if [ $RETVAL -eq 0 ]; then
+					echo_success
+				else
+					echo_failure
+						fi
+						echo
+						return $RETVAL
+}
+
+stop() {
+	echo -n $"Stoping Varnish Cache ID: $SITEID: "
+		getpid
+		RETVAL=$?
+		if [ -n "$pid" ]; then
+			kill $pid
+				sleep 6
+				getpid
+				if [ -z "$pid" ]; then
+					rm -f /var/run/$SITEID
+						echo_success
+				else
+					echo_failure
+						fi
+		else
+			echo_failure
+				fi
+				echo
+				return $RETVAL
+}
+
+# See how we were called.
+case "$1" in
+	start)
+		start
+		;;
+	stop)
+		stop
+		;;
+	status)
+		getpid
+		echo $pid
+		if [ -n "$pid" ]; then
+			echo "Varnish Daemon $SITEID (pid $pid) is running..."
+		else
+			RETVAL=1
+			echo "Varnish $SITEID is stopped"
+		fi
+		;;
+	stats)
+		/usr/local/bin/varnishstat -1 |more
+		;;
+	restart)
+		stop
+		start
+		;;
+	*)
+		echo $"Usage: $0 {start|stop|status|stats|restart}"
+		exit 1
+		;;
+	esac
+	exit $RETVAL
